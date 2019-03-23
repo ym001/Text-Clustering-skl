@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-#  classifTextSKL.JeuxSmear4Smear.py
+#  SKL_clustering_textr.py
 #  
-#  Copyright 2017 yves <yves.mercadier@ac-montpellier.fr>
+#  Copyright 2017 yves <yves.mercadier@lirmm.fr>
 #  
 #  This program is free software; you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
@@ -33,17 +33,18 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import Normalizer
 from sklearn import metrics
 
-from sklearn.cluster import KMeans,AgglomerativeClustering,AffinityPropagation
+from sklearn.cluster import KMeans,AgglomerativeClustering,AffinityPropagation, DBSCAN
+
 from sklearn.mixture import GaussianMixture
 
 from keras.datasets import imdb
-import re
+
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+from nltk import word_tokenize
+from gensim import models, corpora
 
 import numpy as np
-
-import unicodedata
 
 def lecture_du_jeu_de_imdbkeras():
 		max_words=20000
@@ -80,7 +81,7 @@ def main(args):
 	
 	n_features=10000
 	n_components=10
-	verbose=1
+	verbose=0
 
 	print("Extracting features from the training dataset using a sparse vectorizer")
 	hasher = HashingVectorizer(n_features=n_features,
@@ -104,26 +105,48 @@ def main(args):
 
 	explained_variance = svd.explained_variance_ratio_.sum()
 	print("Explained variance of the SVD step: {}%".format(int(explained_variance * 100)))
+	print(" ")
+	################
+	#preparation lda
+	tokenized_data = []
+	for text in doc_train:
+		tokenized_data.append(word_tokenize(text))
+	dictionary = corpora.Dictionary(tokenized_data)
+	corpus = [dictionary.doc2bow(text) for text in tokenized_data]
+	################
+	n_cluster=len(label)
 	clustering={}
-	clustering['KMeans']= KMeans(n_clusters=len(label), init='k-means++', max_iter=100, n_init=1,verbose=verbose)
-	clustering['GaussianMixture']= GaussianMixture(n_components=len(label), covariance_type='full')
-	clustering['AgglomerativeClustering']=AgglomerativeClustering(n_clusters=len(label),linkage='ward')
-
+	clustering['KMeans']= KMeans(n_clusters=n_cluster, init='k-means++', max_iter=100, n_init=1,verbose=verbose)
+	clustering['GaussianMixture']= GaussianMixture(n_components=n_cluster, covariance_type='full')
+	clustering['AgglomerativeClustering']=AgglomerativeClustering(n_clusters=n_cluster,linkage='ward')
+	clustering['Lda']=models.LdaModel(corpus=corpus, num_topics=n_cluster, id2word=dictionary)
+	clustering['DBSCAN']=DBSCAN(algorithm='auto', eps=10, leaf_size=30, metric='euclidean',metric_params=None, n_jobs=None, p=None)
 	for clu in clustering:
 		algo=clustering[clu]
 		print("Clustering sparse data with %s" % clu)
-		algo.fit(X)
+		if clu=='KMeans' or clu=='AgglomerativeClustering'or clu=="GaussianMixture"or clu=="DBSCAN":
+			algo.fit(X)
+		if clu=='KMeans' or clu=='AgglomerativeClustering'or clu=='DBSCAN':
+			labels_prediction=algo.labels_
 		if clu=="GaussianMixture":
 			labels_prediction=algo.predict(X)
-		else:
-			labels_prediction=algo.labels_
-
+		if clu=="Lda":
+			labels_prediction=[]
+			for doc in corpus:
+				proba=[topic[1] for topic in algo[doc]]
+				cluster=proba.index(max(proba))
+				labels_prediction.append(cluster)
+		print("Number of clusters: %d" % n_cluster)
 
 		print("Homogeneity: %0.3f" % metrics.homogeneity_score(label_train, labels_prediction))
 		print("Completeness: %0.3f" % metrics.completeness_score(label_train, labels_prediction))
 		print("V-measure: %0.3f" % metrics.v_measure_score(label_train, labels_prediction))
 		print("Adjusted Rand-Index: %.3f"% metrics.adjusted_rand_score(label_train, labels_prediction))
-		print("Silhouette Coefficient: %0.3f"% metrics.silhouette_score(X, labels_prediction, sample_size=1000))
+		if clu=="DBSCAN":
+			n_cluster= len(set(labels_prediction)) - (1 if -1 in labels_prediction else 0)
+		if n_cluster>1:
+			print("Silhouette Coefficient: %0.3f"% metrics.silhouette_score(X, labels_prediction, sample_size=1000))
+		print(" ")
 
 	print('Fin du script...')
 	return 0
