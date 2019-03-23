@@ -1,2 +1,2 @@
 # Text-Clustering-skl
-clustering de texte à partir du frame work scikit-learn.
+Comparaison des performances de clustering de texte pour les algo suivants : KMeans,GaussianMixture,AgglomerativeClustering.
