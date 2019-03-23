@@ -37,7 +37,7 @@ from sklearn.cluster import KMeans,AgglomerativeClustering,AffinityPropagation, 
 
 from sklearn.mixture import GaussianMixture
 
-from keras.datasets import imdb
+from sklearn.datasets import fetch_20newsgroups
 
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -46,39 +46,25 @@ from gensim import models, corpora
 
 import numpy as np
 
-def lecture_du_jeu_de_imdbkeras():
-		max_words=20000
-		x_train_imdb=[]
-		y_train_imdb=[]
-		(x_imdb, y_imdb), (x_test_imdb, y_test_imdb) = imdb.load_data(num_words=max_words,maxlen=300,seed=113)
-		
-		#reconstruction
-		wordDict = {y:x for x,y in imdb.get_word_index().items()}
-		for doc in x_imdb:
-			sequence=""
-			for index in doc:
-				sequence+=" "+wordDict.get(index)
-			x_train_imdb.append(sequence)
-		for i in y_imdb:
-			y_train_imdb.append(str(i))
-					
-		return x_train_imdb,y_train_imdb
-		
-
-def list_label(label_jeu):
-	label=[]
-	for lab in label_jeu:
-		for l in lab:
-			if l not in label:
-				label.append(l)
-	return label	
+	#####################
+	#lecture du jeu de données news
+	#####################
+def lecture_du_jeu_de_20news():
+		#categorie = ['sci.crypt', 'sci.electronics','sci.med', 'sci.space','rec.autos','rec.motorcycles','rec.sport.baseball','rec.sport.hockey','talk.politics.guns','talk.politics.mideast','talk.politics.misc','talk.religion.misc']
+		categorie = ['sci.crypt', 'sci.electronics']
+		twenty_train = fetch_20newsgroups(subset='train',categories=categorie, shuffle=True, random_state=42)
+		doc=twenty_train.data
+		label=[]
+		for i in range(len(twenty_train.target)):
+			label.append(categorie.index(categorie[twenty_train.target[i]]))
+		return doc,label,categorie	
 		
 def main(args):
 
 	#importation des données
-	doc_train,label_train=lecture_du_jeu_de_imdbkeras()
-	label=list_label(label_train)
-	
+	doc_train,label_train,categorie=lecture_du_jeu_de_20news()
+	n_cluster=len(categorie)
+
 	n_features=10000
 	n_components=10
 	verbose=0
@@ -114,7 +100,6 @@ def main(args):
 	dictionary = corpora.Dictionary(tokenized_data)
 	corpus = [dictionary.doc2bow(text) for text in tokenized_data]
 	################
-	n_cluster=len(label)
 	clustering={}
 	clustering['KMeans']= KMeans(n_clusters=n_cluster, init='k-means++', max_iter=100, n_init=1,verbose=verbose)
 	clustering['GaussianMixture']= GaussianMixture(n_components=n_cluster, covariance_type='full')
